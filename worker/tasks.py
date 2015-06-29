@@ -1,5 +1,5 @@
 from celery import Celery
-app = Celery('tasks', backend = 'cache+memcached://127.0.0.1:11211/', broker='amqp://guest:guest@localhost:5672//')
+app = Celery('tasks', broker='amqp://guest:guest@localhost:5672//')
 app.conf.update(
     CELERY_TASK_SERIALIZER='json',
     CELERY_RESULT_SERIALIZER='json',
