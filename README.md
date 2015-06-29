@@ -1,0 +1,1 @@
+Starting celery workers: celery -A tasks worker --loglevel=info

@@ -1,0 +1,7 @@
+.project
+.externalToolBuilders/
+.settings/
+webserver/node_modules/
+webserver/uploads/
+worker/.idea/
+worker/__pycache__
