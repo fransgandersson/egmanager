@@ -3,5 +3,7 @@
 .settings/
 webserver/node_modules/
 webserver/uploads/
+webserver/taskqueue/node_modules/
+webserver/filelog/node_modules/
 worker/.idea/
 worker/__pycache__

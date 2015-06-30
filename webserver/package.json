@@ -1,12 +1,13 @@
 {
-  "name": "file_upload",
-  "version": "0.0.1",
-  "dependencies": {
-    "express": "~4.10.2",
-    "multer": "~0.1.6",
-    "node-celery": "git://github.com/mher/node-celery.git",
-    "mongodb":"*",
-    "path":"*"
-  }
+	"private": true,
+ 	"name": "egmanager",
+ 	"version": "0.0.1",
+  	"dependencies": 
+  	{
+	    "express": "~4.10.2",
+	    "multer": "~0.1.6",
+    	"filelog":"file:./filelog/",
+    	"taskqueue":"file:./taskqueue/"
+	    }
 }
 

@@ -1,0 +1,10 @@
+{
+	"private": true,
+ 	"name": "taskqueue",
+ 	"version": "0.0.1",
+  	"dependencies": 
+  	{
+	    "node-celery": "git://github.com/mher/node-celery.git"
+	}
+}
+
