@@ -82,14 +82,12 @@ taskQueueClient.start();
 //*****************************************************************
 //					EVENTS
 //  Paths: 
-// 		uploaded -> validated -> not-duplicate -> logged -> task-queued
-//                      |              |
-//                      v              v
-//                   invalid       duplicate
+// 		uploaded ->	validated ->	not-duplicate ->	logged ->	task-queued
+//						|				|
+//						v				v
+//					invalid			duplicate
 // 
 //*****************************************************************
-// Raised if we lost connection to something. For now immediate exit.
-eventEmitter.on('connection-lost', onConnectionLost);
 // Raised when a file has been successfully uploaded 
 eventEmitter.on('file-uploaded', onFileUploaded);
 // Raised when file has been validated
@@ -108,18 +106,51 @@ eventEmitter.on('task-queued', onTaskQueued);
 //*****************************************************************
 //					EVENT HANDLERS
 //*****************************************************************
-function onConnectionLost()
+function onFileUploaded(file, req, res)
 {
-	process.exit(1);
+	_validateFile(file, req, res);
+}
+function onFileValidated(file, req, res)
+{
+	_checkForDuplicate(file, req, res);
+}
+function onFileInvalid(file, req, res)
+{
+	_exitDeletingFile(file, req, res);
+}
+function onFileNotDuplicate(file, req, res)
+{
+	_logFile(file, req, res);
+}
+function onFileDuplicate(file, req, res)
+{
+	_exitDeletingFile(file, req, res);
+}
+function onFileLogged(file, req, res)
+{
+	_queueParsingTask(file, req, res);
+}
+function onTaskQueued(file, req, res)
+{
+	res.end('Hand history successfully uploaded!');
 }
 
-function onFileUploaded(file, req, res)
+//*****************************************************************
+//				UTILITY FUNCTIONS
+//*****************************************************************
+function _exitDeletingFile(file, req, res)
+{
+	console.log('exiting, deleting file');
+	fs.unlink(file.path);
+	res.end('File not uploaded');
+}
+function _validateFile(file, req, res)
 {
 	// TODO, validate for security
 	eventEmitter.emit('file-validated', file, req, res);
+	//if not validated: eventEmitter.emit('file-invalid', file, req, res);
 }
-
-function onFileValidated(file, req, res)
+function _checkForDuplicate(file, req, res)
 {
 	// check for duplicate
 	fileLogClient.get(file.name,
@@ -128,7 +159,7 @@ function onFileValidated(file, req, res)
 			if(err)
 			{
 				console.log('onFileValidated: fileLog error: ' + err.message);
-				return exitDeletingFile(file);
+				return _exitDeletingFile(file, req, res);
 			}
 			if(obj)
 			{
@@ -141,11 +172,7 @@ function onFileValidated(file, req, res)
 			}
 		});
 }
-function onFileInvalid(file, req, res)
-{
-	exitDeletingFile(file);
-}
-function onFileNotDuplicate(file, req, res)
+function _logFile(file, req, res)
 {
 	// File is validated and not a duplicate => log file and proceed
 	fileLogClient.add(file.name, 
@@ -154,7 +181,7 @@ function onFileNotDuplicate(file, req, res)
 			if(err)
 			{
 				console.log('onFileNotDuplicate: fileLog error: ' + err.message);
-				return exitDeletingFile(file);
+				return _exitDeletingFile(file, req, res);
 			}
 			else
 			{
@@ -162,32 +189,19 @@ function onFileNotDuplicate(file, req, res)
 			}
 		});
 }
-function onFileDuplicate(file, req, res)
-{
-	exitDeletingFile(file);
-}
-function onFileLogged(file, req, res)
+function _queueParsingTask(file, req, res)
 {
 	taskQueueClient.add(file.name,
-		function(err)
-		{
-			if(err)
+			function(err)
 			{
-				console.log('onFileLogged: taskQueue error: ' + err.message);
-				return exitDeletingFile(file);
-			}
-			else
-			{
-				eventEmitter.emit('task-queued', file, req, res);
-			}
-		});
-}
-function onTaskQueued(file, req, res)
-{
-	res.end('Hand history successfully uploaded!');
-}
-function exitDeletingFile(file)
-{
-	console.log('exiting, deleting file');
-	fs.unlink(file.path);
+				if(err)
+				{
+					console.log('onFileLogged: taskQueue error: ' + err.message);
+					return _exitDeletingFile(file, req, res);
+				}
+				else
+				{
+					eventEmitter.emit('task-queued', file, req, res);
+				}
+			});
 }
