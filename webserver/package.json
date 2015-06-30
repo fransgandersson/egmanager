@@ -5,7 +5,10 @@
   	"dependencies": 
   	{
 	    "express": "~4.10.2",
+	    "events":"*",
 	    "multer": "~0.1.6",
+	    "path":"*",
+	    "fs":"*",
     	"filelog":"file:./filelog/",
     	"taskqueue":"file:./taskqueue/"
 	    }
