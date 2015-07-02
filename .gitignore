@@ -7,3 +7,4 @@ webserver/taskqueue/node_modules/
 webserver/filelog/node_modules/
 worker/.idea/
 worker/__pycache__
+*.log

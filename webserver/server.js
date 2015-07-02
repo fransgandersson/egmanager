@@ -6,12 +6,16 @@ var events = require('events');
 var multer = require('multer');
 var fs = require('fs');
 var path = require('path');
+var bunyan = require('bunyan');
 var fileLog = require('./filelog/filelog.js');
 var taskQueue = require('./taskqueue/taskqueue.js');
 
 //*****************************************************************
 //				VARIABLES
 //*****************************************************************
+var PORT = 80;
+var LOGLEVEL = 'info';
+
 var sendFileOptions = {root: path.join(__dirname, '/public/')};
 
 var app=express();
@@ -40,18 +44,28 @@ var hhMulter = multer
 	});
 
 //*****************************************************************
+//				PAGES
+//*****************************************************************
+app.use(express.static('public'));
+app.get('/',
+		function(req,res)
+		{
+			res.sendFile('index.html', sendFileOptions);
+		});
+app.get('/upload',
+		function(req,res)
+		{
+			res.sendFile('upload.html', sendFileOptions);
+		});
+
+//*****************************************************************
 //				API
 //*****************************************************************
-app.get('/',
-	function(req,res)
-	{
-		res.sendFile('index.html', sendFileOptions);
-	});
 
 app.get('/api/uploads',
 	function(req,res)
 	{
-		res.sendFile('upload.html', sendFileOptions);
+		_getUploadedFileByTime(req, res, req.query.count);
 	});
 
 app.get('/api/results',
@@ -63,29 +77,37 @@ app.get('/api/results',
 app.post('/api/uploads', hhMulter, 
 	function(req,res)
 	{
+		// handled by multer
 	});
-app.listen(80,
+
+app.listen(PORT,
 	function()
 	{
-	    console.log('listening on port 80');
+	    log.info('listening on port ' + PORT);
 	});
-
-
 //*****************************************************************
 //				START MODULES
 //*****************************************************************
-var fileLogClient = new fileLog('uploaded-files');
+var log = bunyan.createLogger({
+	name: 'server', 
+	streams: [{
+		type: 'rotating-file',
+		path: 'server.log',
+		period: '1h',
+		count: 3}]
+});
+log.level(LOGLEVEL);
+var fileLogClient = new fileLog('uploaded-files', {log: log});
 fileLogClient.start();
 var taskQueueClient = new taskQueue();
 taskQueueClient.start();
-
 //*****************************************************************
 //					EVENTS
 //  Paths: 
-// 		uploaded ->	validated ->	not-duplicate ->	logged ->	task-queued
+// 		uploaded ->	validated ->	not-duplicate ->	logged ->	task-queued	-> 200
 //						|				|
 //						v				v
-//					invalid			duplicate
+//					invalid			duplicate 	=> 200 + message
 // 
 //*****************************************************************
 // Raised when a file has been successfully uploaded 
@@ -116,7 +138,7 @@ function onFileValidated(file, req, res)
 }
 function onFileInvalid(file, req, res)
 {
-	_exitDeletingFile(file, req, res);
+	_exitDeletingFile(file, req, res, 'invalid');
 }
 function onFileNotDuplicate(file, req, res)
 {
@@ -124,7 +146,7 @@ function onFileNotDuplicate(file, req, res)
 }
 function onFileDuplicate(file, req, res)
 {
-	_exitDeletingFile(file, req, res);
+	_exitDeletingFile(file, req, res, 'duplicate');
 }
 function onFileLogged(file, req, res)
 {
@@ -132,17 +154,17 @@ function onFileLogged(file, req, res)
 }
 function onTaskQueued(file, req, res)
 {
-	res.end('Hand history successfully uploaded!');
+	res.sendStatus(200);
 }
 
 //*****************************************************************
 //				UTILITY FUNCTIONS
 //*****************************************************************
-function _exitDeletingFile(file, req, res)
+function _exitDeletingFile(file, req, res, msg)
 {
-	console.log('exiting, deleting file');
+	log.warn('exiting, deleting file: ' + file.name);
 	fs.unlink(file.path);
-	res.end('File not uploaded');
+	res.end(msg);
 }
 function _validateFile(file, req, res)
 {
@@ -158,12 +180,12 @@ function _checkForDuplicate(file, req, res)
 		{
 			if(err)
 			{
-				console.log('onFileValidated: fileLog error: ' + err.message);
-				return _exitDeletingFile(file, req, res);
+				log.error('onFileValidated: fileLog error: ' + err.message);
+				return _exitDeletingFile(file, req, res, 'server-error');
 			}
 			if(obj)
 			{
-				console.log('onFileValidated: duplicate file');
+				log.warn('onFileValidated: duplicate file: ' + file.name);
 				eventEmitter.emit('file-duplicate', file, req, res);
 			}
 			else
@@ -180,8 +202,8 @@ function _logFile(file, req, res)
 		{
 			if(err)
 			{
-				console.log('onFileNotDuplicate: fileLog error: ' + err.message);
-				return _exitDeletingFile(file, req, res);
+				log.error('onFileNotDuplicate: fileLog error: ' + err.message + ' file: ' + file.name);
+				return _exitDeletingFile(file, req, res, 'server-error');
 			}
 			else
 			{
@@ -196,12 +218,29 @@ function _queueParsingTask(file, req, res)
 			{
 				if(err)
 				{
-					console.log('onFileLogged: taskQueue error: ' + err.message);
-					return _exitDeletingFile(file, req, res);
+					log.error('onFileLogged: taskQueue error: ' + err.message + ' file: ' + file.name);
+					return _exitDeletingFile(file, req, res, 'server-error');
 				}
 				else
 				{
 					eventEmitter.emit('task-queued', file, req, res);
+				}
+			});
+}
+
+function _getUploadedFileByTime(req, res, count)
+{
+	fileLogClient.getRecent(count, 
+			function(err, document)
+			{
+				if(err)
+				{
+					log.error('api/uploads: fileLog error: ' + err.message);
+					res.sendStatus(500);
+				}
+				else
+				{
+					res.end(JSON.stringify(document));
 				}
 			});
 }

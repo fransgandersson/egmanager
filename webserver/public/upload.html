@@ -1,8 +1,25 @@
-<form id = "uploadForm"
-	enctype =  "multipart/form-data"
-	action =  "/api/uploads"
-    method = "post"
->
-<input type="file" name="handHistory" />
-<input type="submit" value="Upload Hand history" name="submit">
-</form>
+<!doctype html>
+<html>
+<head>
+    <title>Upload file</title>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+    <script src="js/upload.js"></script> 
+</head>
+<body>
+<div>
+    <form name="formSubmitFile" enctype = "multipart/form-data" method="POST">
+		<div>
+			<input type="file" name="File" />
+		</div>
+		<div>
+        	<button type="submit">Submit</button>
+        </div>
+    </form>
+    <div id="divRecentUploads">
+    	<ul id="ulRecentUploads">
+    		<!-- List items added by script -->
+    	</ul>
+    </div>
+</div>
+</body>
+</html>

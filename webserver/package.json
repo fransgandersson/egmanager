@@ -9,6 +9,7 @@
 	    "multer": "~0.1.6",
 	    "path":"*",
 	    "fs":"*",
+	    "bunyan":"*",
     	"filelog":"file:./filelog/",
     	"taskqueue":"file:./taskqueue/"
 	    }
