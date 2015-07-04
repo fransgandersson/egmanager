@@ -7,7 +7,10 @@ function FileLog(name, options)
 {
 	this.name = name;
 	this.running = false;
-	this.log = options.log.child({module: 'fileLog'});
+	if ( options.log )
+	{
+		this.log = options.log.child({module: 'fileLog'});
+	}
 
 	this.start = FileLog.start;
 	this.get = FileLog.get;
@@ -38,10 +41,10 @@ FileLog.get = function (fileName, callback)
 	
 	if ( !this.running )
 	{
-		this.log.error('db not connected');
+		if (this.log) this.log.error('db not connected');
 		return callback(new Error('not-started'));
 	}
-	db.collection(this.name).findOne({'file': fileName}, 
+	db.collection(this.name).findOne({'originalName': fileName}, 
 		function(err, document) 
 		{
 			if ( err )
@@ -52,16 +55,16 @@ FileLog.get = function (fileName, callback)
 			return callback(null, document);
 		});
 };
-FileLog.add = function (fileName, callback)
+FileLog.add = function (originalFileName, fileName, callback)
 {
 	var self = this;
 	
 	if ( !this.running )
 	{
-		this.log.error('db not connected');
+		if (this.log) this.log.error('db not connected');
 		return callback(new Error('not-started'));
 	}
-	db.collection(this.name).insert({ status: 'queued', file: fileName, time: Date.now()}, {w:1}, 
+	db.collection(this.name).insert({ status: 'queued', originalName : originalFileName, file: fileName, time: Date.now()}, {w:1}, 
 		function(err) 
 		{
 			if (err)
@@ -82,7 +85,7 @@ FileLog.getRecent = function (count, callback)
 	
 	if ( !this.running )
 	{
-		this.log.error('db not connected');
+		if (this.log) this.log.error('db not connected');
 		return callback(new Error('not-started'));
 	}
 	db.collection(this.name).find({}, {'limit': count, 'sort': {time: -1}},

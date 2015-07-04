@@ -5,6 +5,12 @@ webserver/node_modules/
 webserver/uploads/
 webserver/taskqueue/node_modules/
 webserver/filelog/node_modules/
+webserver/filevalidator/node_modules/
 worker/.idea/
 worker/__pycache__
 *.log
+testdata/
+webserver/public/js/xss-filters.min.js
+*.0
+*.1
+*.2

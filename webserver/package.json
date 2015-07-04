@@ -4,13 +4,16 @@
  	"version": "0.0.1",
   	"dependencies": 
   	{
-	    "express": "~4.10.2",
-	    "events":"*",
-	    "multer": "~0.1.6",
-	    "path":"*",
-	    "fs":"*",
-	    "bunyan":"*",
+	    "express": "latest",
+	    "events":"latest",
+	    "multer": "latest",
+	    "path":"latest",
+	    "fs":"latest",
+	    "bunyan":"latest",
+	    "validator":"latest",
+	    "helmet":"latest",
     	"filelog":"file:./filelog/",
+    	"filevalidator":"file:./filevalidator/",
     	"taskqueue":"file:./taskqueue/"
 	    }
 }

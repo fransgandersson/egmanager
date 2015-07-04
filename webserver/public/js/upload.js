@@ -47,7 +47,7 @@ function listUploads(data)
 	$.each(data, 
 		function(i)
 		{
-			var s = new Date(data[i].time).toLocaleString() + ': ' + data[i].file; 
+			var s = new Date(data[i].time).toLocaleString() + ': ' + xssFilters.inHTMLData(data[i].originalName); 
 			var li = $('<li></li>').appendTo(ul);
 			var a = $('<a/>').text(s).appendTo(li);
 		});

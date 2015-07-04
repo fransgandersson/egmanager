@@ -1,0 +1,11 @@
+{
+	"private": true,
+	"name": "filevalidator",
+	"version": "0.0.1",
+  	"dependencies": 
+  	{
+	    "validator":"latest",
+	    "xss-filters":"latest"
+ 	}
+}
+
