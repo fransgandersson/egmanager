@@ -14,3 +14,6 @@ webserver/public/js/xss-filters.min.js
 *.0
 *.1
 *.2
+*.pyc
+*.txt
+mongo/

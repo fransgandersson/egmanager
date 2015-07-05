@@ -33,6 +33,6 @@ TaskQueue.add = function(fileName, callback)
 	{
 		return callback(new Error('not-started'));
 	}
-	celeryClient.call('tasks.parse_handhistory', [fileName]);
+	celeryClient.call('tasks.parse_hand_history', [fileName]);
 	callback(null);
 };
