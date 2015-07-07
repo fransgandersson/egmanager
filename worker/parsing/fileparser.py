@@ -1,19 +1,22 @@
-from parsing.parsingutils import ParsingUtils
 from parsing.handparser import HandParser
-from parsing.handhistorylist import HandHistoryList
+from hand.hhparser import HandHistoryList
 from database.filelogger import FileLogger
 import logging
 from logging import handlers
 import os
+import re
 
 LOG_FILENAME = 'fileparser.log'
 
 
 class FileParser:
 
-    def __init__(self, folder, file_name):
+    __new_hand_regex = re.compile("PokerStars Hand #([\w]+): ")
+
+    def __init__(self, folder, file_name, single_thread=False):
         self.parsers = list()
         self.logger = None
+        self.single_thread = single_thread
         self.path = os.path.join(folder, file_name)
         self.fileLogger = FileLogger(file_name)
 
@@ -26,8 +29,8 @@ class FileParser:
         # file we are currently parsing
         # It can be implemented e.g. as a database
         # Update its status to 'parsing'
-        self.fileLogger.start()
-        self.fileLogger.set_status('parsing')
+        # TODO: self.fileLogger.start()
+        # TODO: self.fileLogger.set_status('parsing')
 
         # Create a buffer for a single hand from the file
         # For efficiency we will read the file line by line and
@@ -48,7 +51,7 @@ class FileParser:
                     i += 1
                 # If this is the beginning of a hand then we
                 # start a parser for it and continue reading the file
-                if ParsingUtils.is_beginning_of_hand(line):
+                if FileParser.__is_beginning_of_hand(line):
                     # Edge case for the first hand
                     # i.e. if buffer is empty
                     if len(buffer) > 0:
@@ -67,20 +70,25 @@ class FileParser:
             self.start_parser(buffer)
 
         self.join_parsers()
-        self.fileLogger.set_status('parsed')
+        # TODO: self.fileLogger.set_status('parsed')
 
     def start_parser(self, buffer):
-        parser = HandParser(buffer)
-        self.parsers.append(parser)
-        parser.start()
+        if self.single_thread:
+            parser = HandParser(buffer)
+            parser.run()
+        else:
+            parser = HandParser(buffer)
+            self.parsers.append(parser)
+            parser.start()
 
     def join_parsers(self):
-        for parser in self.parsers:
-            parser.join()
+        if not self.single_thread:
+            for parser in self.parsers:
+                parser.join()
 
     def create_log(self):
         self.logger = logging.getLogger('fileparser')
-        self.logger.setLevel(logging.WARNING)
+        self.logger.setLevel(logging.DEBUG)
         fh = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=2*1024*1024, backupCount=3)
         fh.setLevel(logging.WARNING)
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -89,6 +97,10 @@ class FileParser:
 
         # console for dev
         ch = logging.StreamHandler()
-        ch.setLevel(logging.WARNING)
+        ch.setLevel(logging.DEBUG)
         ch.setFormatter(formatter)
         self.logger.addHandler(ch)
+
+    @staticmethod
+    def __is_beginning_of_hand(text):
+        return FileParser.__new_hand_regex.match(text) is not None
