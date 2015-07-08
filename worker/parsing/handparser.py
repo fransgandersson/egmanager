@@ -1,4 +1,3 @@
-from hand.hhparser import HandHistoryList
 from hand.hand import Hand
 from threading import Thread
 import logging
@@ -6,7 +5,7 @@ import logging
 
 class HandParser(Thread):
 
-    def __init__(self, buffer: HandHistoryList):
+    def __init__(self, buffer: list):
         Thread.__init__(self)
         self.buffer = buffer
 
@@ -14,12 +13,12 @@ class HandParser(Thread):
         logger = logging.getLogger('fileparser.handparser.HandParser')
         hand = Hand()
         hand.parse(self.buffer)
-        #hand.trace(logger)
+        hand.trace(logger)
 
 
 class HandParserSingleThread():
 
-    def __init__(self, buffer: HandHistoryList):
+    def __init__(self, buffer: list):
         self.buffer = buffer
 
     def run(self):

@@ -122,7 +122,7 @@ class Hand(HandHistoryParser):
                 return False
 
     def __parse_players(self):
-        street_text = self.buffer.pop_street()
+        street_text = HandHistoryParser.pop_street(self.buffer)
         for line in street_text:
             player = Player()
             if player.parse(line):
@@ -131,12 +131,15 @@ class Hand(HandHistoryParser):
 
     def __parse_streets(self):
         while Street.is_valid_street(self.buffer[0]):
-            if self.game == 'TD':
-                street = TripleDrawStreet(self.players, self.buffer.pop(0))
-                street.parse(self.buffer.pop_street())
-            else:
-                street = Street(self.players, self.buffer.pop(0))
-                street.parse(self.buffer.pop_street())
+            street_header = self.buffer.pop(0)
+            street_text = HandHistoryParser.pop_street(self.buffer)
+            for player in self.players:
+                if self.game == 'TD':
+                    street = TripleDrawStreet(street_header)
+                else:
+                    street = TripleDrawStreet(street_header)
+                player.add_street(street)
+                street.parse(street_text)
 
     def __is_blind_game(self):
         if self.game == 'TD':

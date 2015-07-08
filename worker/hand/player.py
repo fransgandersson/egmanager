@@ -63,6 +63,10 @@ class Player(HandHistoryParser):
                     self.blind_amount = match.group('amount')
                     self.ante = True
 
+    def add_street(self, street):
+        street.player = self
+        self.streets.append(street)
+
     def trace(self, logger: logging):
         logger.debug('\t\tname: ' + self.name)
         logger.debug('\t\t\tante: ' + str(self.ante))

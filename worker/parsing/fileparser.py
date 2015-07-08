@@ -1,5 +1,4 @@
 from parsing.handparser import HandParser
-from hand.hhparser import HandHistoryList
 from database.filelogger import FileLogger
 import logging
 from logging import handlers
@@ -38,7 +37,7 @@ class FileParser:
         # When we have buffered a complete hand we kick off a parser
         # in its own thread, clear the buffer and fill it with the
         # next hand and so on until end of file
-        buffer = HandHistoryList()
+        buffer = list()
         i = 0
         self.logger.info('File: ' + self.path)
         with open(self.path, mode='r', encoding='utf-8') as f:
@@ -58,7 +57,7 @@ class FileParser:
                         self.start_parser(buffer)
                     # Now we can reset the buffer and start filling
                     # it with lines from the file
-                    buffer = HandHistoryList()
+                    buffer = list()
                     buffer.append(line)
                 else:
                     # One more line in the file that is not the first line
