@@ -2,7 +2,7 @@ import re
 import logging
 from hand.hhparser import HandHistoryParser
 from hand.player import Player
-from hand.street import Street, TripleDrawStreet
+from hand.street import Street, TripleDrawStreet, HoldemStreet, ShowdownStreet
 
 
 class Hand(HandHistoryParser):
@@ -13,6 +13,8 @@ class Hand(HandHistoryParser):
     __blind_game_regex = re.compile("Table \'(?P<tableName>[^\r\n]+)\' "
                                     "((?P<gameSize>[\d]+)-max)? Seat #(?P<buttonSeat>[\d]+) is the button")
     __stud_game_regex = re.compile("Table \'(?P<tableName>[^\r\n]+)\' ((?P<gameSize>[\d]+)-max)")
+    __pot_regex = re.compile(r"Total pot (\$)?(?P<potamount>[\w.,]+)( Main pot \$[\w.,]+)?( Side "
+                             r"pot \$[\w.,]+)? \| Rake (\$)?(?P<rakeamount>[\w.,]+)([\s]+)?")
 
     def __init__(self, *args, **kwargs):
         super(Hand, self).__init__(*args, **kwargs)
@@ -45,6 +47,8 @@ class Hand(HandHistoryParser):
         self.__parse_table()
         self.__parse_players()
         self.__parse_streets()
+        self.__parse_summary_and_showdown()
+        self.__post_process()
 
     def trace(self, logger: logging):
         logger.debug('handId: ' + str(self.hand_id))
@@ -103,7 +107,7 @@ class Hand(HandHistoryParser):
 
     def __parse_table(self):
         line = self.buffer.pop(0)
-        if self.__is_blind_game():
+        if self.is_blind_game():
             m = re.match(Hand.__blind_game_regex, line)
             if m:
                 self.table_name = m.group('tableName')
@@ -136,23 +140,61 @@ class Hand(HandHistoryParser):
             for player in self.players:
                 if self.game == 'TD':
                     street = TripleDrawStreet(street_header)
+                elif self.game == 'LHE':
+                    street = HoldemStreet(street_header)
+                elif self.game == 'NLHE':
+                    street = HoldemStreet(street_header)
                 else:
-                    street = TripleDrawStreet(street_header)
+                    print('not a valid game!')
                 player.add_street(street)
                 street.parse(street_text)
 
-    def __is_blind_game(self):
-        if self.game == 'TD':
-            return True
-        if self.game == 'LHE':
-            return True
-        if self.game == 'O8':
-            return True
-        if self.game == 'NLHE':
-            return True
-        if self.game == 'PLO':
-            return True
-        return False
+    def __parse_summary_and_showdown(self):
+        while len(self.buffer) > 0:
+            line = self.buffer.pop(0)
+            if line.strip() == HandHistoryParser._street_separators[HandHistoryParser._SUMMARY]:
+                text_block = HandHistoryParser.pop_street(self.buffer)
+                self.__parse_summary(text_block)
+            if line.strip() == HandHistoryParser._street_separators[HandHistoryParser._SHOWDOWN]:
+                text_block = HandHistoryParser.pop_street(self.buffer)
+                self.__parse_showdown(text_block)
+
+    def __parse_summary(self, text_block):
+        for line in text_block:
+            m = re.match(Hand.__pot_regex, line)
+            if m:
+                self.pot = m.group('potamount')
+                self.rake = m.group('rakeamount')
+                return
+
+    def __parse_showdown(self, text_block):
+        for player in self.players:
+            street = ShowdownStreet()
+            player.add_street(street)
+            street.parse(text_block)
+
+    def __post_process(self):
+        for player in self.players:
+            if player.big_blind:
+                self.big_blind = player.blind_amount
+            if player.small_blind:
+                self.small_blind = player.blind_amount
+        for player in self.players:
+            player.post_process(self)
+
+    def verify(self, logger: logging):
+        sum_collected = float(0)
+        sum_net = float(0)
+        for player in self.players:
+            sum_net += float(player.net)
+            sum_collected += float(player.collected_amount)
+        if float(sum_collected) - (float(self.pot) - float(self.rake)) > 0.001:
+            logger.error('collected != pot+rake for hand: ' + self.hand_id)
+            return False
+        if float(sum_net) + float(self.rake) > 0.001:
+            logger.error('net != rake for hand: ' + self.hand_id)
+            return False
+        return True
 
     @staticmethod
     def __get_game_short_name(game):
@@ -174,3 +216,16 @@ class Hand(HandHistoryParser):
         if g == '7 Card Stud Hi/Lo Limit':
             return 'STUD8'
         return ''
+
+    def is_blind_game(self):
+        if self.game == 'TD':
+            return True
+        if self.game == 'LHE':
+            return True
+        if self.game == 'O8':
+            return True
+        if self.game == 'NLHE':
+            return True
+        if self.game == 'PLO':
+            return True
+        return False

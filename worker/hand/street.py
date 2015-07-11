@@ -5,9 +5,9 @@ from hand.hhparser import HandHistoryParser
 
 class Action:
 
-    def __init__(self):
+    def __init__(self, name=''):
         self.index = 0
-        self.action = ''
+        self.action = name
         self.amount = 0
         self.to_amount = 0
 
@@ -33,12 +33,14 @@ class Street(HandHistoryParser):
 
     def __init__(self, header, *args, **kwargs):
         super(Street, self).__init__(*args, **kwargs)
-        self.name = Street._get_street_name(header)
+        if header:
+            self.name = Street._get_street_name(header)
         self.actions = list()
         self.cards = list()
         self.discards = list()
         self.community_cards = list()
         self.player = None
+        self.is_ante_street = False
 
     def parse(self, text_block):
         pass
@@ -67,8 +69,10 @@ class Street(HandHistoryParser):
 
     @staticmethod
     def _get_street_name(text):
-        # TODO: Fix to remove community cards
         s = text.strip()
+        n = s.find('[')
+        if n != -1:
+            s = s[:n-1].strip()
         if s == '*** DEALING HANDS ***':
             return 'preflop'
         if s == '*** HOLE CARDS ***':
@@ -133,6 +137,7 @@ class TripleDrawStreet(Street, HandHistoryParser):
     def parse(self, text_block):
         buffer = list(text_block)
         if self.name == 'preflop':
+            self.is_ante_street = True
             self.__parse_predraw(buffer)
         if self.name == 'flop':
             self.__parse_draw(buffer)
@@ -177,3 +182,75 @@ class TripleDrawStreet(Street, HandHistoryParser):
                         else:
                             self.discards.append(c)
 
+
+class HoldemStreet(Street, HandHistoryParser):
+
+    def parse(self, text_block):
+        buffer = list(text_block)
+        if self.name == 'preflop':
+            self.is_ante_street = True
+            self.__parse_preflop(buffer)
+        if self.name == 'flop':
+            self.__parse_postflop(buffer)
+        if self.name == 'turn':
+            self.__parse_postflop(buffer)
+        if self.name == 'river':
+            self.__parse_postflop(buffer)
+
+    def trace(self, logger: logging):
+        super(HoldemStreet, self).trace(logger)
+
+    def __parse_preflop(self, buffer):
+        while len(buffer) > 0:
+            line = buffer.pop(0)
+            self._parse_dealt_cards(line)
+            self._parse_action(line)
+            self._parse_bet_returned(line)
+            self._parse_collected(line)
+
+    def __parse_postflop(self, buffer):
+        while len(buffer) > 0:
+            line = buffer.pop(0)
+            self._parse_action(line)
+            self._parse_bet_returned(line)
+            self._parse_collected(line)
+
+
+class ShowdownStreet(Street, HandHistoryParser):
+
+    __show_regex = re.compile(r"(?P<name>[^\r\n]+): show([\s]+)?")
+    __muck_regex = re.compile(r"(?P<name>[^\r\n]+): mucks hand([\s]+)?")
+
+    def __init__(self, *args, **kwargs):
+        super(ShowdownStreet, self).__init__(None, *args, **kwargs)
+
+    def parse(self, text_block):
+        buffer = list(text_block)
+        self.name = 'showdown'
+        while len(buffer) > 0:
+            line = buffer.pop(0)
+            self._parse_collected(line)
+            self.__parse_show(line)
+            self.__parse_muck(line)
+
+    def trace(self, logger: logging):
+        super(ShowdownStreet, self).trace(logger)
+
+    def __parse_show(self, line):
+        match = re.match(ShowdownStreet.__show_regex, line)
+        if match:
+            if match.group('name') == self.player.name:
+                self.player.saw_showdown = True
+                self.actions.append(Action('show'))
+                match = re.findall(Street._card_regex, line)
+                if match:
+                    for c in match:
+                        self.cards.append(c)
+                        self.player.final_hand.append(c)
+
+    def __parse_muck(self, line):
+        match = re.match(ShowdownStreet.__muck_regex, line)
+        if match:
+            if match.group('name') == self.player.name:
+                self.actions.append(Action('muck'))
+                self.player.saw_showdown = True

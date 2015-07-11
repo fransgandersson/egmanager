@@ -8,21 +8,19 @@ class HandParser(Thread):
     def __init__(self, buffer: list):
         Thread.__init__(self)
         self.buffer = buffer
+        self.hand = Hand()
 
     def run(self):
         logger = logging.getLogger('fileparser.handparser.HandParser')
-        hand = Hand()
-        hand.parse(self.buffer)
-        hand.trace(logger)
+        self.hand.parse(self.buffer)
 
 
 class HandParserSingleThread():
 
     def __init__(self, buffer: list):
         self.buffer = buffer
+        self.hand = Hand()
 
     def run(self):
         logger = logging.getLogger('fileparser.handparser.HandParser')
-        hand = Hand()
-        hand.parse(self.buffer)
-        hand.trace(logger)
+        self.hand.parse(self.buffer)

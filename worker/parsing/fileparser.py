@@ -1,4 +1,4 @@
-from parsing.handparser import HandParser
+from parsing.handparser import HandParser, HandParserSingleThread
 from database.filelogger import FileLogger
 import logging
 from logging import handlers
@@ -73,7 +73,8 @@ class FileParser:
 
     def start_parser(self, buffer):
         if self.single_thread:
-            parser = HandParser(buffer)
+            parser = HandParserSingleThread(buffer)
+            self.parsers.append(parser)
             parser.run()
         else:
             parser = HandParser(buffer)
@@ -84,6 +85,10 @@ class FileParser:
         if not self.single_thread:
             for parser in self.parsers:
                 parser.join()
+        for parser in self.parsers:
+            if parser.hand.verify(self.logger):
+                pass
+            parser.hand.trace(self.logger)
 
     def create_log(self):
         self.logger = logging.getLogger('fileparser')

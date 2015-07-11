@@ -4,21 +4,22 @@ import logging
 
 class HandHistoryParser:
     _metaclass__ = ABCMeta
-
-    __street_separators = ['*** DEALING HANDS ***',
-                         '*** FIRST DRAW ***',
-                         '*** SECOND DRAW ***',
-                         '*** THIRD DRAW ***',
-                         '*** SHOW DOWN ***',
-                         '*** SUMMARY ***',
-                         '*** HOLE CARDS ***',
-                         '*** FLOP ***',
-                         '*** TURN ***',
-                         '*** RIVER ***',
-                         '*** 3rd STREET ***',
-                         '*** 4th STREET ***',
-                         '*** 5th STREET ***',
-                         '*** 6th STREET ***']
+    _SUMMARY = 5
+    _SHOWDOWN = 4
+    _street_separators = ['*** DEALING HANDS ***',
+                          '*** FIRST DRAW ***',
+                          '*** SECOND DRAW ***',
+                          '*** THIRD DRAW ***',
+                          '*** SHOW DOWN ***',
+                          '*** SUMMARY ***',
+                          '*** HOLE CARDS ***',
+                          '*** FLOP ***',
+                          '*** TURN ***',
+                          '*** RIVER ***',
+                          '*** 3rd STREET ***',
+                          '*** 4th STREET ***',
+                          '*** 5th STREET ***',
+                          '*** 6th STREET ***']
 
     def __init__(self, *args, **kwargs):
         pass
@@ -36,12 +37,16 @@ class HandHistoryParser:
         return_buffer = list()
         while len(text_block) > 0:
             line = text_block.pop(0).strip()
-            if line in HandHistoryParser.__street_separators:
+            clean_line = line
+            n = line.find('[')
+            if n != -1:
+                clean_line = clean_line[:n-1].strip()
+            if (line is None) or (clean_line in HandHistoryParser._street_separators):
                 # put line back on top
                 text_block.insert(0, line)
                 return return_buffer
             else:
                 return_buffer.append(line)
 
-        return None
+        return return_buffer
 

@@ -67,6 +67,31 @@ class Player(HandHistoryParser):
         street.player = self
         self.streets.append(street)
 
+    def post_process(self, hand):
+        self.net = float(0)
+        self.net += float(self.collected_amount)
+        self.net += float(self.returned_amount)
+        blinds_counted = False
+        for street in self.streets:
+            spent = float(0)
+            for action in street.actions:
+                if action.action == 'bets':
+                    spent += float(action.amount)
+                if action.action == 'calls':
+                    spent += float(action.amount)
+                if action.action == 'raises':
+                    if street.is_ante_street:
+                        blinds_counted = True
+                    # NB amount includes all previous bets and calls
+                    #   hence not '+='
+                    spent = float(action.to_amount)
+            self.net -= float(spent)
+        if not blinds_counted:
+            self.net -= float(self.blind_amount)
+        self.net_big_bets = float(self.net) / float(hand.big_bet)
+        if hand.is_blind_game():
+            self.net_big_blinds = float(self.net) / float(hand.big_blind)
+
     def trace(self, logger: logging):
         logger.debug('\t\tname: ' + self.name)
         logger.debug('\t\t\tante: ' + str(self.ante))
