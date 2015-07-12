@@ -1,9 +1,11 @@
 import re
 import logging
-from hand.hhparser import HandHistoryParser
+from hand.parsable import Parsable
+from database.mongo.storable import Storable
+from database.mongo.documents import PlayerDocument
 
 
-class Player(HandHistoryParser):
+class Player(Parsable, Storable):
 
     __player_regex = re.compile("Seat (?P<seat>[\w\s]+): (?P<name>[^\r\n]+)"
                                 " \((\$)?(?P<stackSize>[\w.,]+) in chips\)( is sitting out)?")
@@ -36,6 +38,7 @@ class Player(HandHistoryParser):
         match = re.match(Player.__player_regex, text_block)
         if match:
             self.name = match.group('name')
+            self.seat = match.group('seat')
             return True
         else:
             return False
@@ -75,6 +78,8 @@ class Player(HandHistoryParser):
         for street in self.streets:
             spent = float(0)
             for action in street.actions:
+                if action.action == 'brings':
+                    spent += float(action.amount)
                 if action.action == 'bets':
                     spent += float(action.amount)
                 if action.action == 'calls':
@@ -86,15 +91,30 @@ class Player(HandHistoryParser):
                     #   hence not '+='
                     spent = float(action.to_amount)
             self.net -= float(spent)
-        if not blinds_counted:
+        if hand.is_blind_game():
+            if not blinds_counted:
+                self.net -= float(self.blind_amount)
+        else:
             self.net -= float(self.blind_amount)
-        self.net_big_bets = float(self.net) / float(hand.big_bet)
+        if hand.structure == 'limit':
+            self.net_big_bets = float(self.net) / float(hand.big_bet)
         if hand.is_blind_game():
             self.net_big_blinds = float(self.net) / float(hand.big_blind)
+
+    def create_document(self):
+        hd = PlayerDocument(None, self)
+        hd.create()
+        self.document = hd.document
+
+    def exists(self):
+        db_id = self.inserter.find(self.document['name'])
+        self.db_id = db_id
+        return db_id is not None
 
     def trace(self, logger: logging):
         logger.debug('\t\tname: ' + self.name)
         logger.debug('\t\t\tante: ' + str(self.ante))
+        logger.debug('\t\t\tseat: ' + str(self.seat))
         logger.debug('\t\t\tposition: ' + str(self.position))
         logger.debug('\t\t\tblindAmount: ' + str(self.blind_amount))
         logger.debug('\t\t\tsmallBlind: ' + str(self.small_blind))

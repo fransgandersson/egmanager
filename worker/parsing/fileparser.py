@@ -1,9 +1,13 @@
-from parsing.handparser import HandParser, HandParserSingleThread
-from database.filelogger import FileLogger
 import logging
 from logging import handlers
 import os
 import re
+
+from parsing.handparser import HandParser, HandParserSingleThread
+from hand.hand import PlayerHand
+from database.mongo.filelogger import FileLogger
+from database.mongo.inserters import hand_inserter, player_inserter, player_hand_inserter
+
 
 LOG_FILENAME = 'fileparser.log'
 
@@ -28,8 +32,13 @@ class FileParser:
         # file we are currently parsing
         # It can be implemented e.g. as a database
         # Update its status to 'parsing'
-        # TODO: self.fileLogger.start()
-        # TODO: self.fileLogger.set_status('parsing')
+        self.fileLogger.start()
+        self.fileLogger.set_status('parsing')
+
+        # Start database inserters
+        hand_inserter.start()
+        player_inserter.start()
+        player_hand_inserter.start()
 
         # Create a buffer for a single hand from the file
         # For efficiency we will read the file line by line and
@@ -69,7 +78,7 @@ class FileParser:
             self.start_parser(buffer)
 
         self.join_parsers()
-        # TODO: self.fileLogger.set_status('parsed')
+        self.fileLogger.set_status('parsed')
 
     def start_parser(self, buffer):
         if self.single_thread:
@@ -88,7 +97,18 @@ class FileParser:
         for parser in self.parsers:
             if parser.hand.verify(self.logger):
                 pass
-            parser.hand.trace(self.logger)
+            # parser.hand.trace(self.logger)
+        for parser in self.parsers:
+            parser.hand.create_document()
+            if not parser.hand.exists():
+                parser.hand.insert()
+                for player in parser.hand.players:
+                    player.create_document()
+                    if not player.exists():
+                        player.insert()
+                    player_hand = PlayerHand(parser.hand, player)
+                    player_hand.create_document()
+                    player_hand.insert()
 
     def create_log(self):
         self.logger = logging.getLogger('fileparser')

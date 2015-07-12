@@ -1,6 +1,6 @@
 import re
 import logging
-from hand.hhparser import HandHistoryParser
+from hand.parsable import Parsable
 
 
 class Action:
@@ -18,7 +18,7 @@ class Action:
         logger.debug('\t\t\t\t\tto_amount: ' + str(self.to_amount))
 
 
-class Street(HandHistoryParser):
+class Street(Parsable):
 
     _dealt_to_regex = re.compile(r"Dealt to (?P<name>[^\r\n]+?) \[.*")
     _action_regex = re.compile(r"(?P<name>[^\r\n]+): (?P<action>\b(folds|raises|calls|bets|checks|brings)\b)"
@@ -33,20 +33,26 @@ class Street(HandHistoryParser):
 
     def __init__(self, header, *args, **kwargs):
         super(Street, self).__init__(*args, **kwargs)
-        if header:
-            self.name = Street._get_street_name(header)
+        self.name = ''
         self.actions = list()
         self.cards = list()
         self.discards = list()
         self.community_cards = list()
         self.player = None
         self.is_ante_street = False
+        self.header = header
 
     def parse(self, text_block):
         pass
 
     def trace(self, logger: logging):
         logger.debug('\t\t\t\tname: ' + self.name)
+        s = '['
+        for c in self.community_cards:
+            s += c
+            s += ', '
+        s += ']'
+        logger.debug('\t\t\t\tcommunity_cards: ' + s)
         s = '['
         for c in self.cards:
             s += c
@@ -99,6 +105,14 @@ class Street(HandHistoryParser):
             return 'sixth'
         return None
 
+    def _parse_header(self):
+        if self.header:
+            m = re.findall(Street._card_regex, self.header)
+            if m:
+                for c in m:
+                    self.community_cards.append(c)
+            self.name = Street._get_street_name(self.header)
+
     def _parse_dealt_cards(self, line):
         match = re.match(Street._dealt_to_regex, line)
         if match:
@@ -127,15 +141,18 @@ class Street(HandHistoryParser):
                 self.player.returned_amount = match.group('amount')
 
     def _parse_collected(self, line):
+        self.player.collected_amount = float(0)
         match = re.match(Street._collected_regex, line)
         if match:
             if match.group('name') == self.player.name:
-                self.player.collected_amount = match.group('amount')
+                self.player.collected_amount += float(match.group('amount'))
 
-class TripleDrawStreet(Street, HandHistoryParser):
+
+class TripleDrawStreet(Street, Parsable):
 
     def parse(self, text_block):
         buffer = list(text_block)
+        self._parse_header()
         if self.name == 'preflop':
             self.is_ante_street = True
             self.__parse_predraw(buffer)
@@ -183,24 +200,25 @@ class TripleDrawStreet(Street, HandHistoryParser):
                             self.discards.append(c)
 
 
-class HoldemStreet(Street, HandHistoryParser):
+class HoldemStreet(Street, Parsable):
 
     def parse(self, text_block):
         buffer = list(text_block)
+        self._parse_header()
         if self.name == 'preflop':
             self.is_ante_street = True
-            self.__parse_preflop(buffer)
+            self._parse_preflop(buffer)
         if self.name == 'flop':
-            self.__parse_postflop(buffer)
+            self._parse_postflop(buffer)
         if self.name == 'turn':
-            self.__parse_postflop(buffer)
+            self._parse_postflop(buffer)
         if self.name == 'river':
-            self.__parse_postflop(buffer)
+            self._parse_postflop(buffer)
 
     def trace(self, logger: logging):
         super(HoldemStreet, self).trace(logger)
 
-    def __parse_preflop(self, buffer):
+    def _parse_preflop(self, buffer):
         while len(buffer) > 0:
             line = buffer.pop(0)
             self._parse_dealt_cards(line)
@@ -208,7 +226,7 @@ class HoldemStreet(Street, HandHistoryParser):
             self._parse_bet_returned(line)
             self._parse_collected(line)
 
-    def __parse_postflop(self, buffer):
+    def _parse_postflop(self, buffer):
         while len(buffer) > 0:
             line = buffer.pop(0)
             self._parse_action(line)
@@ -216,7 +234,34 @@ class HoldemStreet(Street, HandHistoryParser):
             self._parse_collected(line)
 
 
-class ShowdownStreet(Street, HandHistoryParser):
+class OmahaStreet(HoldemStreet, Parsable):
+
+    def parse(self, text_block):
+        super(OmahaStreet, self).parse(text_block)
+
+    def trace(self, logger: logging):
+        super(OmahaStreet, self).trace(logger)
+
+
+class StudStreet(Street, Parsable):
+
+    def parse(self, text_block):
+        self._parse_header()
+        if self.name == 'third':
+            self.is_ante_street = True
+        buffer = list(text_block)
+        while len(buffer) > 0:
+            line = buffer.pop(0)
+            self._parse_dealt_cards(line)
+            self._parse_action(line)
+            self._parse_bet_returned(line)
+            self._parse_collected(line)
+
+    def trace(self, logger: logging):
+        super(StudStreet, self).trace(logger)
+
+
+class ShowdownStreet(Street, Parsable):
 
     __show_regex = re.compile(r"(?P<name>[^\r\n]+): show([\s]+)?")
     __muck_regex = re.compile(r"(?P<name>[^\r\n]+): mucks hand([\s]+)?")

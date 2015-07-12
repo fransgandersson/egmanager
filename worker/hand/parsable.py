@@ -2,7 +2,7 @@ from abc import ABCMeta, abstractmethod
 import logging
 
 
-class HandHistoryParser:
+class Parsable(object):
     _metaclass__ = ABCMeta
     _SUMMARY = 5
     _SHOWDOWN = 4
@@ -22,7 +22,7 @@ class HandHistoryParser:
                           '*** 6th STREET ***']
 
     def __init__(self, *args, **kwargs):
-        pass
+        super(Parsable, self).__init__(*args, **kwargs)
 
     @abstractmethod
     def parse(self, text_block):
@@ -41,7 +41,7 @@ class HandHistoryParser:
             n = line.find('[')
             if n != -1:
                 clean_line = clean_line[:n-1].strip()
-            if (line is None) or (clean_line in HandHistoryParser._street_separators):
+            if (line is None) or (clean_line in Parsable._street_separators):
                 # put line back on top
                 text_block.insert(0, line)
                 return return_buffer

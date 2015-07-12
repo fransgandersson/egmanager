@@ -1,11 +1,12 @@
 import re
 import logging
-from hand.hhparser import HandHistoryParser
+from hand.parsable import Parsable
 from hand.player import Player
-from hand.street import Street, TripleDrawStreet, HoldemStreet, ShowdownStreet
+from hand.street import Street, TripleDrawStreet, HoldemStreet, OmahaStreet, StudStreet, ShowdownStreet
+from database.mongo.storable import Storable
+from database.mongo.documents import HandDocument, PlayerHandDocument
 
-
-class Hand(HandHistoryParser):
+class Hand(Parsable, Storable):
 
     __header_regex = re.compile("PokerStars Hand #(?P<handId>[\w]+): (?P<mixType>[\w\s-]+)"
                                 " \((?P<game>[\w\s'-/]+), \$(?P<smallBet>[\w.]+)/\$(?P<bigBet>[\w.]+)"
@@ -21,6 +22,7 @@ class Hand(HandHistoryParser):
         self.hand_id = ''
         self.mix = ''
         self.game = ''
+        self.structure = ''
         self.small_bet = 0
         self.big_bet = 0
         self.small_blind = 0
@@ -49,6 +51,16 @@ class Hand(HandHistoryParser):
         self.__parse_streets()
         self.__parse_summary_and_showdown()
         self.__post_process()
+
+    def create_document(self):
+        hd = HandDocument(self, None)
+        hd.create()
+        self.document = hd.document
+
+    def exists(self):
+        db_id = self.inserter.find(self.document['hand_id'])
+        self.db_id = db_id
+        return db_id is not None
 
     def trace(self, logger: logging):
         logger.debug('handId: ' + str(self.hand_id))
@@ -97,9 +109,10 @@ class Hand(HandHistoryParser):
             self.hand_id = m.group('handId')
             self.mix = m.group('mixType')
             self.game = Hand.__get_game_short_name(m.group('game'))
+            self.structure = Hand.__get_structure(self.game)
             self.small_bet = m.group('smallBet')
             self.big_bet = m.group('bigBet')
-            self.time_stamp = m.group('timeStamp')
+            self.time_stamp = m.group('timeStamp').strip()
             self.currency = m.group('currency')
             return True
         else:
@@ -126,7 +139,7 @@ class Hand(HandHistoryParser):
                 return False
 
     def __parse_players(self):
-        street_text = HandHistoryParser.pop_street(self.buffer)
+        street_text = Parsable.pop_street(self.buffer)
         for line in street_text:
             player = Player()
             if player.parse(line):
@@ -136,27 +149,50 @@ class Hand(HandHistoryParser):
     def __parse_streets(self):
         while Street.is_valid_street(self.buffer[0]):
             street_header = self.buffer.pop(0)
-            street_text = HandHistoryParser.pop_street(self.buffer)
+            street_text = Parsable.pop_street(self.buffer)
             for player in self.players:
                 if self.game == 'TD':
                     street = TripleDrawStreet(street_header)
                 elif self.game == 'LHE':
                     street = HoldemStreet(street_header)
+                elif self.game == 'O8':
+                    street = OmahaStreet(street_header)
+                elif self.game == 'RAZZ':
+                    street = StudStreet(street_header)
+                elif self.game == 'STUD':
+                    street = StudStreet(street_header)
+                elif self.game == 'STUD8':
+                    street = StudStreet(street_header)
                 elif self.game == 'NLHE':
                     street = HoldemStreet(street_header)
+                elif self.game == 'PLO':
+                    street = OmahaStreet(street_header)
                 else:
                     print('not a valid game!')
                 player.add_street(street)
                 street.parse(street_text)
+                if len(street.community_cards) > 0:
+                    if street.name == 'flop':
+                        if len(self.flop) == 0:
+                            for c in street.community_cards:
+                                self.flop.append(c)
+                    if street.name == 'turn':
+                        if len(self.turn) == 0:
+                            for c in street.community_cards:
+                                self.turn.append(c)
+                    if street.name == 'river':
+                        if len(self.river) == 0:
+                            for c in street.community_cards:
+                                self.river.append(c)
 
     def __parse_summary_and_showdown(self):
         while len(self.buffer) > 0:
             line = self.buffer.pop(0)
-            if line.strip() == HandHistoryParser._street_separators[HandHistoryParser._SUMMARY]:
-                text_block = HandHistoryParser.pop_street(self.buffer)
+            if line.strip() == Parsable._street_separators[Parsable._SUMMARY]:
+                text_block = Parsable.pop_street(self.buffer)
                 self.__parse_summary(text_block)
-            if line.strip() == HandHistoryParser._street_separators[HandHistoryParser._SHOWDOWN]:
-                text_block = HandHistoryParser.pop_street(self.buffer)
+            if line.strip() == Parsable._street_separators[Parsable._SHOWDOWN]:
+                text_block = Parsable.pop_street(self.buffer)
                 self.__parse_showdown(text_block)
 
     def __parse_summary(self, text_block):
@@ -174,13 +210,75 @@ class Hand(HandHistoryParser):
             street.parse(text_block)
 
     def __post_process(self):
+        self.__calculate_positions()
         for player in self.players:
             if player.big_blind:
                 self.big_blind = player.blind_amount
             if player.small_blind:
                 self.small_blind = player.blind_amount
+            if self.ante == 0 and player.ante:
+                self.ante = player.blind_amount
         for player in self.players:
             player.post_process(self)
+
+    def __calculate_positions(self):
+        if self.is_blind_game():
+            self.__calculate_positions_blind_game()
+
+    def __calculate_positions_blind_game(self):
+        button_seat = -1
+        button_player = None
+        i = -1
+        for player in self.players:
+            i += 1
+            if player.seat == self.button_seat:
+                button_seat = player.seat
+                player.position = 'button'
+                button_player = player
+                break
+        if len(self.players) == 6:
+            i = self.__get_next_player_index(i)
+            self.players[i].position = 'sb'
+            i = self.__get_next_player_index(i)
+            self.players[i].position = 'bb'
+            i = self.__get_next_player_index(i)
+            self.players[i].position = 'utg'
+            i = self.__get_next_player_index(i)
+            self.players[i].position = 'mp'
+            i = self.__get_next_player_index(i)
+            self.players[i].position = 'co'
+        if len(self.players) == 5:
+            i = self.__get_next_player_index(i)
+            self.players[i].position = 'sb'
+            i = self.__get_next_player_index(i)
+            self.players[i].position = 'bb'
+            i = self.__get_next_player_index(i)
+            self.players[i].position = 'mp'
+            i = self.__get_next_player_index(i)
+            self.players[i].position = 'co'
+        if len(self.players) == 4:
+            i = self.__get_next_player_index(i)
+            self.players[i].position = 'sb'
+            i = self.__get_next_player_index(i)
+            self.players[i].position = 'bb'
+            i = self.__get_next_player_index(i)
+            self.players[i].position = 'co'
+        if len(self.players) == 3:
+            i = self.__get_next_player_index(i)
+            self.players[i].position = 'sb'
+            i = self.__get_next_player_index(i)
+            self.players[i].position = 'bb'
+        if len(self.players) == 2:
+            i = self.__get_next_player_index(i)
+            self.players[i].position = 'bb'
+
+
+    def __get_next_player_index(self, from_index):
+        index = from_index + 1
+        if len(self.players) > index:
+            return index
+        else:
+            return 0
 
     def verify(self, logger: logging):
         sum_collected = float(0)
@@ -217,6 +315,26 @@ class Hand(HandHistoryParser):
             return 'STUD8'
         return ''
 
+    @staticmethod    
+    def __get_structure(game):
+        if game == 'TD':
+            return 'limit'
+        if game == 'LHE':
+            return 'limit'
+        if game == 'O8':
+            return 'limit'
+        if game == 'RAZZ':
+            return 'limit'
+        if game == 'STUD':
+            return 'limit'
+        if game == 'STUD8':
+            return 'limit'
+        if game == 'NLHE':
+            return 'nolimit'
+        if game == 'PLO':
+            return 'potlimit'
+        return ''
+
     def is_blind_game(self):
         if self.game == 'TD':
             return True
@@ -229,3 +347,25 @@ class Hand(HandHistoryParser):
         if self.game == 'PLO':
             return True
         return False
+
+
+class PlayerHand(Parsable, Storable):
+
+    def __init__(self, hand: Hand, player: Player, *args, **kwargs):
+        super(PlayerHand, self).__init__(*args, **kwargs)
+        self.hand = hand
+        self.player = player
+
+    def parse(self, text_block):
+        pass
+
+    def create_document(self):
+        hd = PlayerHandDocument(self.hand, self.player)
+        hd.create()
+        self.document = hd.document
+
+    def exists(self):
+        return False
+
+    def trace(self, logger: logging):
+        pass
