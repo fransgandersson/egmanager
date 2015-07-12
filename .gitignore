@@ -16,5 +16,5 @@ webserver/public/js/xss-filters.min.js
 *.2
 *.pyc
 *.txt
-mongo/
 worker/test.py
+*.conf
