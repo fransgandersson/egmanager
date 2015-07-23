@@ -21,8 +21,8 @@ class Parsable(object):
                           '*** 5th STREET ***',
                           '*** 6th STREET ***']
 
-    def __init__(self, *args, **kwargs):
-        super(Parsable, self).__init__(*args, **kwargs)
+    def __init__(self):
+        super(Parsable, self).__init__()
 
     @abstractmethod
     def parse(self, text_block):

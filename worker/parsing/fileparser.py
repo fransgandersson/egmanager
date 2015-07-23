@@ -6,7 +6,8 @@ import re
 from parsing.handparser import HandParser, HandParserSingleThread
 from hand.hand import PlayerHand
 from database.mongo.filelogger import FileLogger
-from database.mongo.inserters import hand_inserter, player_inserter, player_hand_inserter
+from database.mongo.inserters import hand_inserter, player_inserter, player_hand_inserter, cache_inserter
+from database.mongo.cache import Cache
 
 
 LOG_FILENAME = 'fileparser.log'
@@ -22,10 +23,11 @@ class FileParser:
         self.single_thread = single_thread
         self.path = os.path.join(folder, file_name)
         self.fileLogger = FileLogger(file_name)
+        self.cache = None
 
     def parse(self):
         # Create error log
-        self.create_log()
+        self.__create_log()
 
         # Start the file log
         # The file log contains the
@@ -39,6 +41,10 @@ class FileParser:
         hand_inserter.start()
         player_inserter.start()
         player_hand_inserter.start()
+        cache_inserter.start()
+
+        # Create player result cache
+        self.__create_cache()
 
         # Create a buffer for a single hand from the file
         # For efficiency we will read the file line by line and
@@ -63,7 +69,7 @@ class FileParser:
                     # Edge case for the first hand
                     # i.e. if buffer is empty
                     if len(buffer) > 0:
-                        self.start_parser(buffer)
+                        self.__start_parser(buffer)
                     # Now we can reset the buffer and start filling
                     # it with lines from the file
                     buffer = list()
@@ -75,12 +81,13 @@ class FileParser:
 
         # don't forget the last hand
         if len(buffer) > 0:
-            self.start_parser(buffer)
+            self.__start_parser(buffer)
 
-        self.join_parsers()
+        self.__join_parsers()
+        self.cache.store()
         self.fileLogger.set_status('parsed')
 
-    def start_parser(self, buffer):
+    def __start_parser(self, buffer):
         if self.single_thread:
             parser = HandParserSingleThread(buffer)
             self.parsers.append(parser)
@@ -90,7 +97,7 @@ class FileParser:
             self.parsers.append(parser)
             parser.start()
 
-    def join_parsers(self):
+    def __join_parsers(self):
         if not self.single_thread:
             for parser in self.parsers:
                 parser.join()
@@ -109,8 +116,9 @@ class FileParser:
                     player_hand = PlayerHand(parser.hand, player)
                     player_hand.create_document()
                     player_hand.insert()
+                self.cache.add_hand(parser.hand)
 
-    def create_log(self):
+    def __create_log(self):
         self.logger = logging.getLogger('fileparser')
         self.logger.setLevel(logging.DEBUG)
         fh = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=2*1024*1024, backupCount=3)
@@ -124,6 +132,10 @@ class FileParser:
         ch.setLevel(logging.DEBUG)
         ch.setFormatter(formatter)
         self.logger.addHandler(ch)
+
+    def __create_cache(self):
+        self.cache = Cache()
+        self.cache.load()
 
     @staticmethod
     def __is_beginning_of_hand(text):

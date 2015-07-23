@@ -6,6 +6,7 @@ from hand.street import Street, TripleDrawStreet, HoldemStreet, OmahaStreet, Stu
 from database.mongo.storable import Storable
 from database.mongo.documents import HandDocument, PlayerHandDocument
 
+
 class Hand(Parsable, Storable):
 
     __header_regex = re.compile("PokerStars Hand #(?P<handId>[\w]+): (?P<mixType>[\w\s-]+)"
@@ -41,7 +42,7 @@ class Hand(Parsable, Storable):
         self.players = list()
         self.session_start_time = ''
         self.session_end_time = ''
-        self.buffer = None
+        self.buffer = list()
 
     def parse(self, text_block):
         self.buffer = text_block
@@ -226,15 +227,11 @@ class Hand(Parsable, Storable):
             self.__calculate_positions_blind_game()
 
     def __calculate_positions_blind_game(self):
-        button_seat = -1
-        button_player = None
         i = -1
         for player in self.players:
             i += 1
             if player.seat == self.button_seat:
-                button_seat = player.seat
                 player.position = 'button'
-                button_player = player
                 break
         if len(self.players) == 6:
             i = self.__get_next_player_index(i)
@@ -271,7 +268,6 @@ class Hand(Parsable, Storable):
         if len(self.players) == 2:
             i = self.__get_next_player_index(i)
             self.players[i].position = 'bb'
-
 
     def __get_next_player_index(self, from_index):
         index = from_index + 1
@@ -369,3 +365,4 @@ class PlayerHand(Parsable, Storable):
 
     def trace(self, logger: logging):
         pass
+

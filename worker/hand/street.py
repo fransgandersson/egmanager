@@ -26,13 +26,14 @@ class Street(Parsable):
     _card_regex = re.compile(r"(?P<card>[\d|T|J|Q|K|A][h|s|c|d])[\s|\]]")
     _draw_regex = re.compile(r"(?P<name>[^\r\n]+): ((discards ?(?P<amount>[\w.,]+) "
                              r"card[s]*([\s]+)?(\[.*\])?)|(stands pat))")
-    _bet_returned_regex = re.compile(r"Uncalled bet \((\$)?(?P<amount>[\w.,]+)\) returned to (?P<name>[^\r\n]+)([\s]+)?")
+    _bet_returned_regex = re.compile(r"Uncalled bet \((\$)?(?P<amount>[\w.,]+)\) "
+                                     r"returned to (?P<name>[^\r\n]+)([\s]+)?")
     _collected_regex = re.compile(r"(?P<name>[^\r\n]+) collected (\$)?"
                                   r"(?P<amount>[\w.,]+) from( main)?( side)? pot([\s]+)?")
     _action_index = 0
 
-    def __init__(self, header, *args, **kwargs):
-        super(Street, self).__init__(*args, **kwargs)
+    def __init__(self, header):
+        super(Street, self).__init__()
         self.name = ''
         self.actions = list()
         self.cards = list()

@@ -18,22 +18,22 @@ class StakeDocument(Document):
 
     def create(self):
         self.document = {'structure': self.hand.structure,
-                    'small_bet': self.hand.small_bet,
-                    'big_bet': self.hand.big_bet,
-                    'small_blind': self.hand.small_blind,
-                    'big_blind': self.hand.big_blind,
-                    'ante': self.hand.ante,
-                    'max_buyin': 0,
-                    'currency': 'USD'}
+                         'small_bet': self.hand.small_bet,
+                         'big_bet': self.hand.big_bet,
+                         'small_blind': self.hand.small_blind,
+                         'big_blind': self.hand.big_blind,
+                         'ante': self.hand.ante,
+                         'max_buyin': 0,
+                         'currency': 'USD'}
 
 
 class TableSessionDocument(Document):
 
     def create(self):
         self.document = {'table_name': self.hand.table_name,
-                    'start_time': self.hand.session_start_time,
-                    'end_time': self.hand.session_end_time,
-                    'size': self.hand.game_size}
+                         'start_time': self.hand.session_start_time,
+                         'end_time': self.hand.session_end_time,
+                         'size': self.hand.game_size}
 
 
 class HandDocument(Document):
@@ -53,30 +53,57 @@ class HandDocument(Document):
                          'rake': self.hand.rake,
                          'stake': stake_document.document,
                          'table_session': session_document.document,
-                         'flop': self.__get_street_document('flop'),
-                         'turn': self.__get_street_document('turn'),
-                         'river': self.__get_street_document('river')}
-
-    def __get_street_document(self, street_name):
-        street_document = list()
-        card_list = list()
-        if street_name == 'flop':
-            card_list = self.hand.flop
-        if street_name == 'turn':
-            card_list = self.hand.turn
-        if street_name == 'river':
-            card_list = self.hand.river
-
-        for c in card_list:
-            street_document.append(c)
-        return street_document
+                         'flop': self.hand.flop,
+                         'turn': self.hand.turn,
+                         'river': self.hand.river}
 
 
 class PlayerDocument(Document):
 
     def create(self):
         self.document = {'name': self.player.name,
-                    'site': 'pokerstars'}
+                         'site': 'pokerstars'}
+
+
+class ActionDocument(Document):
+
+    def __init__(self, hand, player, action):
+        super(ActionDocument, self).__init__(hand, player)
+        self.hand = hand
+        self.player = player
+        self.document = None
+        self.action = action
+
+    def create(self):
+        self.document = {'index': self.action.index,
+                         'action': self.action.action,
+                         'amount': self.action.amount,
+                         'to_amount': self.action.to_amount}
+
+
+class StreetDocument(Document):
+
+    def __init__(self, hand, player, street):
+        super(StreetDocument, self).__init__(hand, player)
+        self.hand = hand
+        self.player = player
+        self.document = None
+        self.street = street
+
+    def create(self):
+        self.document = {'name': self.street.name,
+                         'draw_count': len(self.street.discards),
+                         'discards': self.street.discards,
+                         'cards': self.street.cards,
+                         'actions': self.__create_action_documents()}
+
+    def __create_action_documents(self):
+        docs = list()
+        for a in self.street.actions:
+            doc = ActionDocument(self.hand, self.player, a)
+            doc.create()
+            docs.append(doc.document)
+        return docs
 
 
 class PlayerHandDocument(Document):
@@ -90,4 +117,13 @@ class PlayerHandDocument(Document):
                          'net_big_blinds': self.player.net_big_blinds,
                          'won': (float(self.player.collected_amount) > 0.0001),
                          'seat': self.player.seat,
-                         'position': self.player.position}
+                         'position': self.player.position,
+                         'streets': self.__create_street_documents()}
+
+    def __create_street_documents(self):
+        docs = list()
+        for street in self.player.streets:
+            doc = StreetDocument(self.hand, self.player, street)
+            doc.create()
+            docs.append(doc.document)
+        return docs

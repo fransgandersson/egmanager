@@ -1,4 +1,4 @@
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta
 from pymongo import MongoClient
 import logging
 
@@ -24,11 +24,16 @@ class DatabaseInserter:
             self.__collection = self.client['results']['players']
         if self.document_type == 'player_hand':
             self.__collection = self.client['results']['player-hands']
+        if self.document_type == 'player_cache':
+            self.__collection = self.client['results']['player-cache']
         return True
 
     def insert(self, document):
         self.db_id = self.__collection.insert_one(document).inserted_id
         return self.db_id
+
+    def upsert(self, document, key_dictionary):
+        self.__collection.update(key_dictionary, document, True)
 
     def find(self, unique_field):
         doc = None
@@ -43,3 +48,4 @@ class DatabaseInserter:
 hand_inserter = DatabaseInserter('hand')
 player_inserter = DatabaseInserter('player')
 player_hand_inserter = DatabaseInserter('player_hand')
+cache_inserter = DatabaseInserter('player_cache')
